@@ -1,0 +1,6 @@
+# fmverify copies Fmverify.Annotations.cs into the project as generated code.
+# It carries no repository file header and its attribute properties are intentionally
+# undocumented here, so the toolkit's strict documentation/style rules do not apply to it.
+[Fmverify.Annotations.cs]
+dotnet_diagnostic.IDE0073.severity = none
+dotnet_diagnostic.CS1591.severity = none

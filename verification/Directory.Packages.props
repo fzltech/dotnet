@@ -1,0 +1,20 @@
+<Project>
+
+  <!--
+    Scaffold boundary, NuGet half. NuGet walks up from each project to the nearest
+    Directory.Packages.props and stops there; this file makes the walk stop here, so the
+    target repository's central package management does not reach the generated projects.
+    Without it, a target with ManagePackageVersionsCentrally=true makes every versioned
+    PackageReference below fail restore with NU1008.
+
+    The generated projects pin their own versions on purpose. They come from the fmverify
+    release that produced this layer, not from the target's file — and a solver version
+    pinned centrally in the target would be resolvable, version-less, by the target's own
+    production code.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+</Project>

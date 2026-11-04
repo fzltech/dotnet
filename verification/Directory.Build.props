@@ -1,0 +1,29 @@
+<Project>
+
+  <!--
+    Scaffold boundary, MSBuild props half. MSBuild imports the nearest
+    Directory.Build.props walking up from each project and then stops, so the existence of
+    this file — not anything in it — is what keeps the target repository's build
+    configuration away from generated code.
+
+    The properties below are a separate job: they turn off the .NET SDK's OWN defaults.
+    EnableNETAnalyzers is on by default for net5.0 and later, and generated model code is
+    Z3 expression-builder calls (MkAnd, MkEq, ...) that trip CA naming and complexity rules
+    with no ruleset involved. Asking an adopter to fix the style of a generated file is work
+    with no upside. Do not delete these on the reasoning that the walk already stopped.
+
+    Hand-written code an adopter adds under this root inherits the same opt-out. If they
+    want house rules applied to their adapter and encoding, they can add a nested
+    Directory.Build.props beside those files.
+  -->
+
+  <PropertyGroup>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
+    <!-- The scaffold targets net8.0, but this machine only has the .NET 10 runtime. -->
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+
+</Project>

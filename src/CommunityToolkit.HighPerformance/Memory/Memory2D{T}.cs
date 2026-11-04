@@ -665,8 +665,9 @@ public readonly struct Memory2D<T> : IEquatable<Memory2D<T>>
             ThrowHelper.ThrowArgumentOutOfRangeExceptionForWidth();
         }
 
-        int shift = ((this.width + this.pitch) * row) + column;
-        int pitch = this.pitch + (this.width - width);
+        int rowOffset = (this.width + this.pitch) * row;
+        int shift = SliceArithmetic.GetColumnOffset(rowOffset, column);
+        int pitch = SliceArithmetic.GetPitch(this.width, this.pitch, width);
 
         IntPtr offset = this.offset + (shift * sizeof(T));
 
