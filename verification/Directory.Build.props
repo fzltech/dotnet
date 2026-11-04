@@ -22,7 +22,7 @@
     <EnableNETAnalyzers>false</EnableNETAnalyzers>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
-    <!-- The scaffold targets net8.0, but this machine only has the .NET 10 runtime. -->
+    <!-- The scaffold targets net8.0; allow a newer installed runtime to run it. -->
     <RollForward>Major</RollForward>
   </PropertyGroup>
 

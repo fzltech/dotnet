@@ -18,8 +18,8 @@ namespace CommunityToolkit.HighPerformance.Memory.Internals;
 internal static class SliceArithmetic
 {
     /// <summary>
-    /// Computes the pitch of a slice that starts at the current view's column and is
-    /// <paramref name="sliceWidth"/> columns wide.
+    /// Computes the pitch of a <paramref name="sliceWidth"/>-wide slice taken from a
+    /// <paramref name="width"/>-wide view.
     /// </summary>
     [Requires("width > 0 && width <= 1024 && pitch >= 0 && pitch <= 1024 && sliceWidth >= 0 && sliceWidth <= width")]
     [Ensures("result == pitch + (width - sliceWidth) && result >= 0")]
