@@ -182,14 +182,17 @@ the `OverflowHelper` call site, the copied annotation file, and a one-file `.edi
 
 ## Follow-ups filed
 
-- `init` chooses an unrunnable target framework for generated projects on a multi-target target.
-- `Fmverify.Annotations` attributes need `AllowMultiple = true`.
-- The source-copy annotation file needs to be analyzer-clean, or the tool needs to emit a scoped
-  exclusion.
-- F5 should reject or time-bound nonlinear multiplication instead of hanging.
-- The bridge coverage message should distinguish “no annotations” from “no registered checks.”
-- The scaffold should target an installed runtime or set `RollForward` when the target's TFM has no
-  runtime.
+- [#35](https://github.com/fzltech/fmverify/issues/35) — `init`/`add-bridge` choose the target's
+  first TFM for generated projects, producing an unrunnable layer on a multi-target target (also
+  covers the missing `RollForward` / installed-runtime choice).
+- [#36](https://github.com/fzltech/fmverify/issues/36) — `Fmverify.Annotations` attributes need
+  `AllowMultiple = true`; the documented multiple-`[Ensures]` form does not compile.
+- [#37](https://github.com/fzltech/fmverify/issues/37) — the F5 checker accepts nonlinear
+  multiplication but Z3 does not terminate; add a timeout and/or reject the construct.
+- [#38](https://github.com/fzltech/fmverify/issues/38) — the source-copy annotation file fails
+  strict target analyzers (`CS1591`, `IDE0073`).
+- [#39](https://github.com/fzltech/fmverify/issues/39) — the bridge coverage line reports “no
+  annotations” when the target has annotations but no registered conformance check.
 
 ## What this does and does not say
 
