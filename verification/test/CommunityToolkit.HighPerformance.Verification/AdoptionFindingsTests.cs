@@ -54,6 +54,20 @@ public class AdoptionFindingsTests
     }
 
     [Fact]
+    public void For_covers_every_index_when_batches_overshoot_the_count()
+    {
+        // 5 iterations split into 4 batches of 2: the final batch starts past `end` and is empty.
+        const int count = 5;
+        int start = int.MaxValue - count;
+        int end = int.MaxValue;
+        int[] counts = new int[1];
+
+        ParallelHelper.For(start, end, new CountingAction(counts), 1);
+
+        Assert.Equal(count, counts[0]);
+    }
+
+    [Fact]
     public void Target_declares_four_proven_symbolic_claims()
     {
         var targetSource = System.IO.Path.GetFullPath(System.IO.Path.Combine(

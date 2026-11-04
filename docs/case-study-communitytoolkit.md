@@ -36,7 +36,7 @@ cd verification
 bash ./fetch-solver.sh
 bash ./verify.sh
 # ...
-# Passed! - Failed: 0, Passed: 14, Skipped: 0, Total: 14
+# Passed! - Failed: 0, Passed: 15, Skipped: 0, Total: 15
 ```
 
 The claims are deliberately bounded. fmverify's F5 engine has no `long`, no division, and no
@@ -84,9 +84,10 @@ The missing 248 invocations are the final batch. On a machine with more cores th
 larger; the defect gets worse with more parallelism.
 
 **Fix.** Counts and offsets are now computed in `long`, the batch start is narrowed back to `int`
-after the arithmetic (it is always a valid index), and the stop is computed by
-`ParallelArithmetic.GetBatchStop` on the proved non-negative path or by `long` arithmetic on the
-negative path. The same change also fixes the related upstream overflow in
+after the arithmetic (it is always a valid index), a batch that starts at or past `end` returns
+without invoking anything, and the stop is computed by `ParallelArithmetic.GetBatchStop` on the
+proved non-negative path or by `long` arithmetic on the negative path. The same change also fixes
+the related upstream overflow in
 [CommunityToolkit/dotnet#1188](https://github.com/CommunityToolkit/dotnet/issues/1188), where
 `Math.Abs(start - end)` overflows for ranges wider than `int.MaxValue` and throws for
 `[int.MinValue, 0)`.

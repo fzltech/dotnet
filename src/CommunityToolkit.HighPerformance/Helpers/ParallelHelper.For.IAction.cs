@@ -223,7 +223,16 @@ public static partial class ParallelHelper
             // The offset can exceed int.MaxValue for a range wider than int.MaxValue elements, even
             // though the index itself still fits in int.
             long offset = (long)i * this.batchSize;
-            int low = (int)((long)this.start + offset);
+            long lowLong = (long)this.start + offset;
+
+            // The final batch can start past the end when batchSize * numBatches overshoots count;
+            // there is nothing to invoke for it, and narrowing it would wrap.
+            if (lowLong >= this.end)
+            {
+                return;
+            }
+
+            int low = (int)lowLong;
 
             // The non-negative branch is the one fmverify proves; the negative branch has to use
             // long because end - low can be larger than int.MaxValue there.
