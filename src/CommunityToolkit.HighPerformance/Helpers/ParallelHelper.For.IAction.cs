@@ -169,6 +169,11 @@ public static partial class ParallelHelper
         int cores = Environment.ProcessorCount;
         long numBatches = Math.Min(maxBatches, cores);
 
+        // A batch size is an int, so a range wider than int.MaxValue needs at least enough batches
+        // that no single batch exceeds it.
+        long minBatches = (count + int.MaxValue - 1) / int.MaxValue;
+        numBatches = Math.Max(numBatches, minBatches);
+
         // Skip the parallel invocation when a single batch is needed
         if (numBatches == 1)
         {
