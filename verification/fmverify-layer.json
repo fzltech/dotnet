@@ -1,0 +1,10 @@
+{
+  "note": "Written by fmverify. Commit it. An upgrade run reads this to refresh the layer without being told again which state kind, bound, gate framework, target project and engines it was generated with, and to refuse a downgrade by an older tool.",
+  "stateKind": "scalar",
+  "boundContainers": 2,
+  "boundItems": 3,
+  "gateFramework": "xunit",
+  "targetProject": "CommunityToolkit.HighPerformance",
+  "toolVersion": "0.1.0",
+  "annotationsVersion": "2026.09.1"
+}

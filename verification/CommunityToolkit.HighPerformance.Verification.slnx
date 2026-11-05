@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Solution>
+  <Project Path="../src/CommunityToolkit.HighPerformance/CommunityToolkit.HighPerformance.csproj" />
+  <Project Path="src/CommunityToolkit.HighPerformance.Spec/CommunityToolkit.HighPerformance.Spec.csproj" />
+  <Project Path="src/CommunityToolkit.HighPerformance.Spec.Descriptor/CommunityToolkit.HighPerformance.Spec.Descriptor.csproj" />
+  <Project Path="test/CommunityToolkit.HighPerformance.Verification/CommunityToolkit.HighPerformance.Verification.csproj" />
+  <Project Path="src/CommunityToolkit.HighPerformance.Conformance/CommunityToolkit.HighPerformance.Conformance.csproj" />
+</Solution>
