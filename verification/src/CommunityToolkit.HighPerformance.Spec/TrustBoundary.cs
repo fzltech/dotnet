@@ -43,15 +43,25 @@ public static class TrustBoundary
         sb.Append("  The proof gate fails if this file and the registry disagree.\n");
         sb.Append("-->\n\n");
 
+        var machineIntClaims = translationClaims.Count(
+            claim => claim.Semantics == "int32-bitvector" &&
+                     claim.Termination == "total" &&
+                     !claim.Vacuous &&
+                     claim.Status == "verified");
+        var translatedClaims = $"{translationClaims.Count} translated " +
+                               (translationClaims.Count == 1 ? "claim is" : "claims are") +
+                               $" recorded; {machineIntClaims} " +
+                               (machineIntClaims == 1 ? "is a machine-int proof" : "are machine-int proofs");
+
         if (translationClaims.Count > 0)
         {
             if (conformanceBacked.Length == 0)
             {
-                sb.Append($"**No property in this layer constrains CommunityToolkit.HighPerformance's code via bridge. {translationClaims.Count} claims are directly proven from translated source code. The rest constrain the model only.**\n\n");
+                sb.Append($"**No property in this layer constrains CommunityToolkit.HighPerformance's code via bridge. {translatedClaims}. The rest constrain the model only.**\n\n");
             }
             else
             {
-                sb.Append($"**{conformanceBacked.Length} of {properties.Length} properties constrain CommunityToolkit.HighPerformance's code via bridge. {translationClaims.Count} claims are directly proven from translated source code. The rest constrain the model only.**\n\n");
+                sb.Append($"**{conformanceBacked.Length} of {properties.Length} properties constrain CommunityToolkit.HighPerformance's code via bridge. {translatedClaims}. The rest constrain the model only.**\n\n");
             }
         }
         else
@@ -91,12 +101,14 @@ public static class TrustBoundary
         if (translationClaims.Count > 0)
         {
             sb.Append("## Translated code claims\n\n");
-            sb.Append("Proven directly about CommunityToolkit.HighPerformance's source code by translating annotated C# into formal specifications:\n\n");
-            sb.Append("| Owner / Member | Contract | Expression | Engine | Semantics | Status |\n");
-            sb.Append("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+            sb.Append("Recorded by translating annotated C# into formal specifications. A `mathematical-int`\n");
+            sb.Append("claim proves over unbounded integers; it is not a proof about C# `int` and cannot\n");
+            sb.Append("satisfy a machine-int contract.\n\n");
+            sb.Append("| Owner / Member | Contract | Expression | Engine | Semantics | Termination | Status |\n");
+            sb.Append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
             foreach (var claim in translationClaims)
             {
-                sb.Append($"| {CodeCell(claim.Owner)} | {TextCell(claim.Kind)} | {CodeCell(claim.Expression)} | {TextCell(claim.Engine)} | {TextCell(claim.Semantics)} | {TextCell(claim.Status)} |\n");
+                sb.Append($"| {CodeCell(claim.Owner)} | {TextCell(claim.Kind)} | {CodeCell(claim.Expression)} | {TextCell(claim.Engine)} | {TextCell(claim.Semantics)} | {TextCell(claim.Termination)} | {TextCell(claim.Status)} |\n");
             }
             sb.Append("\n");
         }
@@ -191,6 +203,23 @@ public static class TrustBoundary
     }
 
     /// <summary>
+    /// The layer root a host may name before calling the gate, instead of letting the locators walk
+    /// up from <see cref="AppContext.BaseDirectory"/>.
+    ///
+    /// <para>Null in every ordinary gate run, where the output directory sits inside the layer and
+    /// the walk is the whole answer. A harness that compiles this layer in memory has no output
+    /// directory inside it, so it names the root instead. Scoped rather than global because tests
+    /// run layers in parallel: one class naming its root must not redirect another's lookup.</para>
+    /// </summary>
+    public static string? LayerRoot
+    {
+        get => _layerRoot.Value;
+        set => _layerRoot.Value = value;
+    }
+
+    private static readonly AsyncLocal<string?> _layerRoot = new();
+
+    /// <summary>
     /// The committed document, found by ascending to the scaffold root — the directory holding
     /// the generated solution — and taking the file beside it. The gate and the descriptor's
     /// emit mode both call this, from different output directories, so both resolve one file.
@@ -202,6 +231,15 @@ public static class TrustBoundary
     public static string LocateFile()
     {
         const string solution = "CommunityToolkit.HighPerformance.Verification.slnx";
+
+        if (LayerRoot is { } root)
+        {
+            var named = Path.Combine(root, FileName);
+            if (File.Exists(named)) return named;
+
+            throw new FileNotFoundException(
+                $"Layer root '{root}' has no {FileName}. Regenerate it with --emit-trust-boundary.");
+        }
 
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
@@ -225,6 +263,8 @@ public static class TrustBoundary
     public static string? LocateTranslationEvidence(string? scaffoldRoot = null)
     {
         const string solution = "CommunityToolkit.HighPerformance.Verification.slnx";
+
+        scaffoldRoot ??= LayerRoot;
 
         if (scaffoldRoot is not null)
         {
@@ -277,8 +317,20 @@ public static class TrustBoundary
                 var engine = elem.TryGetProperty("engine", out var pEng) ? pEng.GetString() ?? "" : "";
                 var semantics = elem.TryGetProperty("semantics", out var pSem) ? pSem.GetString() ?? "" : "";
                 var status = elem.TryGetProperty("status", out var pStat) ? pStat.GetString() ?? "" : "";
+                var termination = elem.TryGetProperty("termination", out var pTerm) ? pTerm.GetString() ?? "unknown" : "unknown";
+                var vacuous = elem.TryGetProperty("vacuous", out var pVac) && pVac.GetBoolean();
 
-                list.Add(new TranslationClaimInfo(id, owner, kind, expr, engine, semantics, status));
+                // Older evidence files recorded caveated claims as "verified". The document is
+                // derived from the evidence, so it must show the caveat even then.
+                if (status == "verified")
+                {
+                    if (vacuous) status = "vacuous";
+                    else if (semantics == "mathematical-int") status = "mathematical-only";
+                    else if (termination != "total") status = termination;
+                }
+
+                list.Add(new TranslationClaimInfo(
+                    id, owner, kind, expr, engine, semantics, termination, vacuous, status));
             }
 
             return list
@@ -312,6 +364,8 @@ public static class TrustBoundary
         string Expression,
         string Engine,
         string Semantics,
+        string Termination,
+        bool Vacuous,
         string Status);
 
     /// <summary>

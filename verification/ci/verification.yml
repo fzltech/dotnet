@@ -17,6 +17,10 @@ on:
   push:
     branches: [ main, master ]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   prove:
     runs-on: ubuntu-latest
@@ -29,3 +33,8 @@ jobs:
       - name: Prove
         working-directory: verification
         run: bash ./verify.sh
+      - name: Upload SARIF
+        if: always() && hashFiles('verification/translation/fmverify-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: verification/translation/fmverify-results.sarif

@@ -6,13 +6,20 @@ try {
     & "$PSScriptRoot/fetch-solver.ps1"
 
 
+    # Build before the translation refresh: the audit warns when coverage evidence predates the
+    # target assembly, and on a clean run prove writes its evidence after this line.
+    dotnet build "CommunityToolkit.HighPerformance.Verification.slnx" -c Release
+
     if (Test-Path "translation") {
         # `..`, not `.`: this script has moved into the layer, and prove must inspect the target
         # repository. Pointed at the layer it finds only the layer's own projects, cannot tell
         # which is under verification, and refuses rather than guess (I-NO-GUESS).
         if ((Get-Command fmverify -ErrorAction SilentlyContinue) -and $env:FMTRANSLATOR) {
+            # fmtranslator --backend=auto may emit .smt2 artifacts; the pinned CLI runs them.
+            # An explicit Z3 path wins, so a preinstalled or locally pinned binary skips the fetch.
+            if (-not $env:Z3) { & "$PSScriptRoot/fetch-z3.ps1" }
             Write-Host "== Translation proof gate =="
-            fmverify prove ..
+            fmverify prove .. --annotations=both
             # $ErrorActionPreference does not stop a native command's non-zero exit.
             if ($LASTEXITCODE -ne 0) { Write-Error "Translation proof refresh failed."; exit 1 }
         }
@@ -22,7 +29,6 @@ try {
         }
     }
 
-    dotnet build "CommunityToolkit.HighPerformance.Verification.slnx" -c Release
     Write-Host "== Capability honesty check =="
     # --check, not the bare JSON emit: that refuses to serialise a ConformanceBacked property,
     # because it cannot run your target and so cannot certify a claim about it -- which would take
@@ -38,6 +44,11 @@ try {
     # Naming a path here is what makes it visible on a green run.
     $env:FMVERIFY_COVERAGE_OUT = Join-Path (Get-Location) "bridge-coverage.txt"
 
+    # Symbolic results are published by the same run: the JSON is the audit's input, the text file
+    # is the block printed below. Both are report-only, so an unwritable path never reddens the gate.
+    $env:FMVERIFY_SYMBOLIC_OUT = Join-Path (Get-Location) "symbolic-coverage.json"
+    $env:FMVERIFY_SYMBOLIC_TEXT_OUT = Join-Path (Get-Location) "symbolic-coverage.txt"
+
     dotnet test "CommunityToolkit.HighPerformance.Verification.slnx" -c Release --no-build --filter "Category!=hunt"
 
     # After the gate, because that is when the file exists. The gate writes it before its own
@@ -46,5 +57,11 @@ try {
         Write-Host ""
         Write-Host "== Bridge coverage =="
         Get-Content $env:FMVERIFY_COVERAGE_OUT
+    }
+
+    if (Test-Path $env:FMVERIFY_SYMBOLIC_TEXT_OUT) {
+        Write-Host ""
+        Write-Host "== Symbolic coverage =="
+        Get-Content $env:FMVERIFY_SYMBOLIC_TEXT_OUT
     }
 } finally { Pop-Location }

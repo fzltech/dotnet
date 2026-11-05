@@ -13,20 +13,27 @@ cd "$(dirname "$0")"
 bash ./fetch-solver.sh
 
 
+# Build before the translation refresh: the audit warns when coverage evidence predates the target
+# assembly, and on a clean run prove writes its evidence after this line.
+dotnet build "CommunityToolkit.HighPerformance.Verification.slnx" -c Release
+
 if [ -d "translation" ]; then
   # `..`, not `.`: this script has cd'd into the layer, and prove must inspect the target
   # repository. Pointed at the layer it finds only the layer's own projects, cannot tell which
   # is under verification, and refuses rather than guess (I-NO-GUESS).
   if command -v fmverify >/dev/null 2>&1 && [ -n "${FMTRANSLATOR:-}" ]; then
+    # fmtranslator --backend=auto may emit .smt2 artifacts; the pinned CLI runs them.
+    # An explicit Z3 path wins, so a preinstalled or locally pinned binary skips the fetch.
+    if [ -z "${Z3:-}" ]; then
+      bash ./fetch-z3.sh
+    fi
     echo "== Translation proof gate =="
-    fmverify prove ..
+    fmverify prove .. --annotations=both
   else
     # The gate still checks the committed evidence; only the refresh is skipped.
     echo "translation/ present, but fmverify or FMTRANSLATOR is unavailable; checking committed evidence only." >&2
   fi
 fi
-
-dotnet build "CommunityToolkit.HighPerformance.Verification.slnx" -c Release
 
 echo "== Capability honesty check =="
 # Non-zero here means an advertised capability class did not discharge. set -e stops us.
@@ -48,6 +55,11 @@ dotnet run --project "src/CommunityToolkit.HighPerformance.Spec.Descriptor" -c R
 # on a green run.
 export FMVERIFY_COVERAGE_OUT="$PWD/bridge-coverage.txt"
 
+# Symbolic results are published by the same run: the JSON is the audit's input, the text file is
+# the block printed below. Both are report-only, so an unwritable path never reddens the gate.
+export FMVERIFY_SYMBOLIC_OUT="$PWD/symbolic-coverage.json"
+export FMVERIFY_SYMBOLIC_TEXT_OUT="$PWD/symbolic-coverage.txt"
+
 dotnet test "CommunityToolkit.HighPerformance.Verification.slnx" -c Release --no-build --filter "Category!=hunt"
 
 # After the gate, because that is when the file exists. The gate writes it before its own assertion,
@@ -57,4 +69,10 @@ if [ -f "$FMVERIFY_COVERAGE_OUT" ]; then
   echo
   echo "== Bridge coverage =="
   cat "$FMVERIFY_COVERAGE_OUT"
+fi
+
+if [ -f "$FMVERIFY_SYMBOLIC_TEXT_OUT" ]; then
+  echo
+  echo "== Symbolic coverage =="
+  cat "$FMVERIFY_SYMBOLIC_TEXT_OUT"
 fi

@@ -675,6 +675,9 @@ public sealed class PredicateExpression
                     _at++;
                     return new Node.BoolLiteral(token.Kind == Kind.True);
 
+                case Kind.Identifier when TryIntBound(out var bound):
+                    return new Node.IntLiteral(bound);
+
                 case Kind.Identifier:
                     return new Node.Member(ParsePath());
 
@@ -735,6 +738,26 @@ public sealed class PredicateExpression
                     throw new PredicateSyntaxException(
                         $"unexpected '{token.Text}' at {token.Position}, where a value was expected.");
             }
+        }
+
+        /// <summary>
+        /// The two C# int bounds are constants, not member paths on the receiver. Without this,
+        /// <c>int.MaxValue</c> would parse as a dotted path and fail at evaluation.
+        /// </summary>
+        private bool TryIntBound(out int value)
+        {
+            value = 0;
+            if (Current.Kind != Kind.Identifier || Current.Text != "int") return false;
+            if (_at + 2 >= tokens.Count) return false;
+            if (tokens[_at + 1].Kind != Kind.Dot) return false;
+            if (tokens[_at + 2].Kind != Kind.Identifier) return false;
+
+            var name = tokens[_at + 2].Text;
+            if (name is not ("MaxValue" or "MinValue")) return false;
+
+            _at += 3;
+            value = name == "MaxValue" ? int.MaxValue : int.MinValue;
+            return true;
         }
 
         /// <summary>

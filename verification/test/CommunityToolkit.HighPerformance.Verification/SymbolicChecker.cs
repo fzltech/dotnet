@@ -39,6 +39,15 @@ public abstract record SymbolicCheckResult
     public sealed record Unsupported(string MethodName, string Reason) : SymbolicCheckResult;
 }
 
+public sealed record LocatedMethod(
+    string Owner,
+    string Signature,
+    string File,
+    int Line,
+    MethodDeclarationSyntax Method);
+
+public sealed record LocatedSymbolicResult(LocatedMethod Location, SymbolicCheckResult Result);
+
 public sealed record MethodContracts(IReadOnlyList<string> Requires, IReadOnlyList<string> Ensures)
 {
     public string? ConjoinedRequires => Requires.Count switch
@@ -118,6 +127,29 @@ public static class MethodSource
     }
 }
 
+/// <summary>
+/// The two C# int bounds accepted in annotation expressions. The annotation language is a
+/// predicate grammar, not compiled C#, so the symbolic engine resolves these itself.
+/// </summary>
+internal static class IntBounds
+{
+    public static bool TryGet(MemberAccessExpressionSyntax member, out int value)
+    {
+        if (member.Expression is PredefinedTypeSyntax predefined &&
+            predefined.Keyword.Text == "int" &&
+            member.Name.Identifier.Text is "MaxValue" or "MinValue")
+        {
+            value = member.Name.Identifier.Text == "MaxValue"
+                ? int.MaxValue
+                : int.MinValue;
+            return true;
+        }
+
+        value = 0;
+        return false;
+    }
+}
+
 public static class SubsetValidator
 {
     private static readonly int IdealMagnitudeBits = (int)DualEncoder.IdealWidth - 1;
@@ -180,6 +212,11 @@ public static class SubsetValidator
                 case ParenthesizedExpressionSyntax:
                 case IdentifierNameSyntax:
                 case ConditionalExpressionSyntax:
+                case MemberAccessExpressionSyntax member when IntBounds.TryGet(member, out _):
+                    break;
+                case PredefinedTypeSyntax predefined when
+                    predefined.Parent is MemberAccessExpressionSyntax parent &&
+                    IntBounds.TryGet(parent, out _):
                     break;
                 case LiteralExpressionSyntax lit when lit.Token.Value is int or bool:
                     break;
@@ -212,6 +249,9 @@ public static class SubsetValidator
     {
         ParenthesizedExpressionSyntax p => MagnitudeBits(p.Expression),
         LiteralExpressionSyntax { Token.Value: int v } => LiteralMagnitudeBits(v),
+        MemberAccessExpressionSyntax member when IntBounds.TryGet(member, out var bound) =>
+            LiteralMagnitudeBits(bound),
+        // Any Int32, so at most 2^31 — which int.MinValue reaches exactly.
         IdentifierNameSyntax => 31,
         ConditionalExpressionSyntax c => ConditionalMagnitudeBits(c),
         BinaryExpressionSyntax b => BinaryMagnitudeBits(b),
@@ -278,6 +318,8 @@ public sealed class DualEncoder
     {
         ParenthesizedExpressionSyntax p => Encode(p.Expression),
         LiteralExpressionSyntax lit => EncodeLiteral(lit),
+        MemberAccessExpressionSyntax member when IntBounds.TryGet(member, out var bound) =>
+            EncodeInt(bound),
         IdentifierNameSyntax id => EncodeIdentifier(id),
         PrefixUnaryExpressionSyntax u => EncodeUnary(u),
         BinaryExpressionSyntax b => EncodeBinary(b),
@@ -287,10 +329,18 @@ public sealed class DualEncoder
 
     private Encoded EncodeLiteral(LiteralExpressionSyntax lit) => lit.Token.Value switch
     {
-        int v => new IntEncoded(_ctx.MkBV(v, 32), _ctx.MkBV(v, IdealWidth)),
+        int v => EncodeInt(v),
+        // A boolean constant is the same under both interpretations: no width, nothing to wrap.
         bool b => new BoolEncoded(_ctx.MkBool(b), _ctx.MkBool(b)),
         _ => throw new NotSupportedException($"literal '{lit.Token.Text}' is neither int nor bool"),
     };
+
+    /// <summary>
+    /// MkBV of a signed int produces its two's-complement value at each width, so the wide
+    /// literal is the sign-extension of the 32-bit one: the same integer, with more headroom.
+    /// </summary>
+    private Encoded EncodeInt(int value) =>
+        new IntEncoded(_ctx.MkBV(value, 32), _ctx.MkBV(value, IdealWidth));
 
     private Encoded EncodeIdentifier(IdentifierNameSyntax id)
     {
@@ -630,14 +680,14 @@ public static class SymbolicChecker
         e as BoolEncoded ?? throw new NotSupportedException("method does not return a boolean expression");
 }
 
-public static class SymbolicMethodChecker
+public static class SymbolicMethodLocator
 {
-    public static IReadOnlyList<SymbolicCheckResult> CheckAll(string targetSourceDirectory)
+    public static IReadOnlyList<LocatedMethod> Enumerate(string targetSourceDirectory)
     {
         if (!System.IO.Directory.Exists(targetSourceDirectory))
-            return Array.Empty<SymbolicCheckResult>();
+            return Array.Empty<LocatedMethod>();
 
-        var results = new List<SymbolicCheckResult>();
+        var located = new List<LocatedMethod>();
         var files = System.IO.Directory.EnumerateFiles(targetSourceDirectory, "*.cs", System.IO.SearchOption.AllDirectories)
             .Where(f => !IsExcluded(f));
 
@@ -652,19 +702,77 @@ public static class SymbolicMethodChecker
             catch { continue; }
 
             var root = tree.GetRoot();
-            var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
-
-            foreach (var method in methods)
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (HasContractAttributes(method))
-                {
-                    results.Add(SymbolicChecker.CheckContracts(method));
-                }
+                if (SymbolicMethodChecker.HasContractAttributes(method))
+                    located.Add(new LocatedMethod(Owner(method), Signature(method), file, Line(method), method));
             }
         }
 
-        return results;
+        // Directory enumeration order is not guaranteed. The coverage files and verify.sh's block
+        // must not vary between runs, so publish a stable order.
+        return located
+            .OrderBy(location => location.Owner, StringComparer.Ordinal)
+            .ThenBy(location => location.Signature, StringComparer.Ordinal)
+            .ThenBy(location => location.File, StringComparer.Ordinal)
+            .ToList();
     }
+
+    private static string Owner(MethodDeclarationSyntax method)
+    {
+        var parts = new List<string>();
+        for (var node = method.Parent; node is not null; node = node.Parent)
+        {
+            switch (node)
+            {
+                case TypeDeclarationSyntax type:
+                    parts.Add(type.Identifier.Text);
+                    break;
+                case BaseNamespaceDeclarationSyntax ns:
+                    parts.Add(ns.Name.ToString());
+                    break;
+            }
+        }
+
+        parts.Reverse();
+        parts.Add(method.Identifier.Text);
+        return string.Join(".", parts);
+    }
+
+    private static string Signature(MethodDeclarationSyntax method)
+    {
+        var parameters = method.ParameterList.Parameters
+            .Select(parameter => parameter.Type?.ToString() ?? string.Empty);
+
+        return $"{method.Identifier.Text}({string.Join(", ", parameters)})";
+    }
+
+    private static int Line(MethodDeclarationSyntax method) =>
+        method.Identifier.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+    private static bool IsExcluded(string path)
+    {
+        var segments = path.Split(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+        return segments.Any(s => s is "obj" or "bin" or ".git" or "verification" or ".packages");
+    }
+}
+
+public static class SymbolicMethodChecker
+{
+    /// <summary>
+    /// Every symbolic result with the source location it came from. The results are named after the
+    /// canonical owner (namespace, enclosing types, method) rather than the bare identifier, so two
+    /// types that each declare the same method are distinguishable in the report.
+    /// </summary>
+    public static IReadOnlyList<LocatedSymbolicResult> CheckAllWithLocations(string targetSourceDirectory) =>
+        SymbolicMethodLocator.Enumerate(targetSourceDirectory)
+            .Select(located => new LocatedSymbolicResult(
+                located,
+                Rename(SymbolicChecker.CheckContracts(located.Method), located.Owner)))
+            .ToList();
+
+    public static IReadOnlyList<SymbolicCheckResult> CheckAll(string targetSourceDirectory) =>
+        CheckAllWithLocations(targetSourceDirectory).Select(result => result.Result).ToList();
 
     public static bool HasContractAttributes(MethodDeclarationSyntax method)
     {
@@ -676,6 +784,17 @@ public static class SymbolicMethodChecker
         var contracts = ContractExtractor.Extract(method);
         return contracts.Requires.Count > 0 || contracts.Ensures.Count > 0;
     }
+
+    private static SymbolicCheckResult Rename(SymbolicCheckResult result, string owner) => result switch
+    {
+        SymbolicCheckResult.Verified verified => verified with { MethodName = owner },
+        SymbolicCheckResult.ContractViolation violation => violation with { MethodName = owner },
+        SymbolicCheckResult.OverflowDivergence overflow => overflow with { MethodName = owner },
+        SymbolicCheckResult.PreconditionContradiction contradiction =>
+            contradiction with { MethodName = owner },
+        SymbolicCheckResult.Unsupported unsupported => unsupported with { MethodName = owner },
+        _ => result,
+    };
 
     private static bool HasAttribute(MethodDeclarationSyntax method, string attributeName)
     {
@@ -689,11 +808,5 @@ public static class SymbolicMethodChecker
                     || name.EndsWith("." + attributeName, StringComparison.Ordinal)
                     || name.EndsWith("." + attributeName + "Attribute", StringComparison.Ordinal);
             });
-    }
-
-    private static bool IsExcluded(string path)
-    {
-        var segments = path.Split(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
-        return segments.Any(s => s is "obj" or "bin" or ".git" or "verification" or ".packages");
     }
 }

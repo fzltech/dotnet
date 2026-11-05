@@ -118,18 +118,69 @@ public class RegistryProofs
             var summary = root.GetProperty("summary");
             var failed = summary.GetProperty("failed").GetInt32();
             var notRun = summary.GetProperty("notRun").GetInt32();
+            var unknown = summary.TryGetProperty("unknown", out var pUnknown)
+                ? pUnknown.GetInt32()
+                : 0;
+            var mathematicalOnly = summary.TryGetProperty("mathematicalOnly", out var pMath)
+                ? pMath.GetInt32()
+                : 0;
+            var partial = summary.TryGetProperty("partial", out var pPartial)
+                ? pPartial.GetInt32()
+                : 0;
+            var vacuous = summary.TryGetProperty("vacuous", out var pVacuous)
+                ? pVacuous.GetInt32()
+                : 0;
 
             // The claim's own status, not just the counters: a summary and a claims array that
             // disagree is the state a hand edit or a badly resolved merge leaves behind, and the
             // published claim — not the count — is the record that has to be proven.
-            var unverified = root.GetProperty("claims").EnumerateArray()
-                .Where(c => c.GetProperty("status").GetString() != "verified")
-                .Select(c => $"{c.GetProperty("id").GetString()}: {c.GetProperty("status").GetString()} ({c.GetProperty("owner").GetString()})")
+            //
+            // Semantics and termination are load-bearing: a mathematical-int proof is about
+            // unbounded integers, not C# int, and a partial proof is not a total-correctness proof.
+            var failedArtifacts = root.GetProperty("artifacts").EnumerateArray()
+                .Where(a => a.GetProperty("status").GetString() != "verified")
+                .Select(a => $"{a.GetProperty("output").GetString()}: {a.GetProperty("status").GetString()}")
                 .ToArray();
 
-            Assert.True(unverified.Length == 0 && failed == 0 && notRun == 0,
-                $"Translation claims are unverified ({failed} failed, {notRun} not run). Run `fmverify prove`:\n" +
-                string.Join("\n", unverified));
+            var unverified = root.GetProperty("claims").EnumerateArray()
+                .Where(c =>
+                {
+                    var status = c.GetProperty("status").GetString();
+                    var semantics = c.TryGetProperty("semantics", out var pSem) ? pSem.GetString() : null;
+                    var termination = c.TryGetProperty("termination", out var pTerm) ? pTerm.GetString() : "unknown";
+                    var isVacuous = c.TryGetProperty("vacuous", out var pVac) && pVac.GetBoolean();
+                    return status != "verified" || semantics != "int32-bitvector" ||
+                           termination != "total" || isVacuous;
+                })
+                .Select(c =>
+                {
+                    var status = c.GetProperty("status").GetString();
+                    var semantics = c.TryGetProperty("semantics", out var pSem) ? pSem.GetString() ?? "" : "";
+                    var termination = c.TryGetProperty("termination", out var pTerm) ? pTerm.GetString() ?? "unknown" : "unknown";
+                    var isVacuous = c.TryGetProperty("vacuous", out var pVac) && pVac.GetBoolean();
+                    var display = status;
+                    if (display == "verified")
+                    {
+                        if (isVacuous) display = "vacuous";
+                        else if (semantics != "int32-bitvector") display = "mathematical-only";
+                        else if (termination != "total") display = termination;
+                    }
+                    return $"{c.GetProperty("id").GetString()}: {display} " +
+                           $"({c.GetProperty("owner").GetString()}, {semantics}, {termination})";
+                })
+                .ToArray();
+
+            Assert.True(
+                unverified.Length == 0 && failed == 0 && notRun == 0 && unknown == 0 &&
+                mathematicalOnly == 0 && partial == 0 && vacuous == 0 && failedArtifacts.Length == 0,
+                $"Translation evidence is not a set of verified machine-int proofs " +
+                $"({failed} failed, {notRun} not run, {unknown} unknown, " +
+                $"{mathematicalOnly} mathematical-only, {partial} partial, {vacuous} vacuous, " +
+                $"{failedArtifacts.Length} unverified artifact(s)). " +
+                "A mathematical-int claim proves unbounded integers, not C# int; a partial claim " +
+                "proves partial correctness. Use a bounded Z3 claim for a total machine-int proof. " +
+                "Run `fmverify prove`:\n" +
+                string.Join("\n", unverified.Concat(failedArtifacts)));
         }
     }
 }

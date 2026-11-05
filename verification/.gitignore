@@ -16,3 +16,12 @@ obj/
 # Written by the gate on every run and printed by verify.sh, so a committed copy would go stale
 # silently — and it is a report about one run rather than a fact about the layer.
 bridge-coverage.txt
+
+# Per-method symbolic outcomes from the same run: the JSON feeds the audit, the text is what
+# verify.sh prints. Both are reports about one run, not facts about the layer.
+symbolic-coverage.json
+symbolic-coverage.txt
+
+# Generated on every prove run; uploaded by CI rather than committed.
+translation/repro/
+translation/fmverify-results.sarif
