@@ -162,10 +162,17 @@ public static partial class ParallelHelper
             return;
         }
 
-        int count = Math.Abs(start - end);
-        int maxBatches = 1 + ((count - 1) / minimumActionsPerThread);
+        // A range can contain more than int.MaxValue elements ([int.MinValue, int.MaxValue) contains
+        // 2^32 - 1), so the count must be computed in long even though each index is an int.
+        long count = (long)end - start;
+        long maxBatches = 1 + ((count - 1) / minimumActionsPerThread);
         int cores = Environment.ProcessorCount;
-        int numBatches = Math.Min(maxBatches, cores);
+        long numBatches = Math.Min(maxBatches, cores);
+
+        // A batch size is an int, so a range wider than int.MaxValue needs at least enough batches
+        // that no single batch exceeds it.
+        long minBatches = (count + int.MaxValue - 1) / int.MaxValue;
+        numBatches = Math.Max(numBatches, minBatches);
 
         // Skip the parallel invocation when a single batch is needed
         if (numBatches == 1)
@@ -178,15 +185,15 @@ public static partial class ParallelHelper
             return;
         }
 
-        int batchSize = 1 + ((count - 1) / numBatches);
+        int batchSize = (int)(1 + ((count - 1) / numBatches));
 
         ActionInvoker<TAction> actionInvoker = new(start, end, batchSize, action);
 
         // Run the batched operations in parallel
         _ = Parallel.For(
             0,
-            numBatches,
-            new ParallelOptions { MaxDegreeOfParallelism = numBatches },
+            (int)numBatches,
+            new ParallelOptions { MaxDegreeOfParallelism = (int)numBatches },
             actionInvoker.Invoke);
     }
 
@@ -218,10 +225,25 @@ public static partial class ParallelHelper
         /// <param name="i">The index of the batch to process</param>
         public void Invoke(int i)
         {
-            int offset = i * this.batchSize;
-            int low = this.start + offset;
-            int high = low + this.batchSize;
-            int stop = Math.Min(high, this.end);
+            // The offset can exceed int.MaxValue for a range wider than int.MaxValue elements, even
+            // though the index itself still fits in int.
+            long offset = (long)i * this.batchSize;
+            long lowLong = (long)this.start + offset;
+
+            // The final batch can start past the end when batchSize * numBatches overshoots count;
+            // there is nothing to invoke for it, and narrowing it would wrap.
+            if (lowLong >= this.end)
+            {
+                return;
+            }
+
+            int low = (int)lowLong;
+
+            // The non-negative branch is the one fmverify proves; the negative branch has to use
+            // long because end - low can be larger than int.MaxValue there.
+            int stop = low >= 0
+                ? ParallelArithmetic.GetBatchStop(low, this.batchSize, this.end)
+                : (int)Math.Min((long)low + this.batchSize, this.end);
 
             for (int j = low; j < stop; j++)
             {
