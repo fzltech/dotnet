@@ -4,7 +4,9 @@
 Community Toolkit, MIT-licensed and maintained by Microsoft / the .NET Foundation.
 **Fork:** [`fzltech/dotnet`](https://github.com/fzltech/dotnet), branch `verification/adoption`.
 **Issue:** [fzltech/fmverify#27](https://github.com/fzltech/fmverify/issues/27).
-**Date:** 2026-11-04. **fmverify:** `0.1.0`, annotations `2026.09.1`, Z3 `5.3.3`.
+**Date:** 2026-11-04; updated 2026-11-05 after
+[fzltech/fmverify#29](https://github.com/fzltech/fmverify/pull/41).
+**fmverify:** `0.1.0`, annotations `2026.09.1`, Z3 `5.3.3`.
 
 This is the first adoption of fmverify onto a real, external C# library rather than one of its
 own fixtures. The goal was not a big proof; it was to find out what the first hour actually costs,
@@ -127,9 +129,63 @@ engine, not bugs in the target.
 6. **The coverage line is misleading.** The gate prints “the target declares no `[Requires]`,
    `[Ensures]`, … annotation” when there are no registered conformance checks, even though the
    symbolic checker just proved four `[Requires]`/`[Ensures]` methods. The sentence conflates
-   “no annotations reached by a conformance check” with “no annotations at all.”
+   “no annotations reached by a conformance check” with “no annotations at all.” This is tracked as
+   [#39](https://github.com/fzltech/fmverify/issues/39). After #29, `fmverify audit` reads the
+   gate's `symbolic-coverage.json` and lists those four claims as proven; the gate's own line still
+   needs the wording fix.
 
 ---
+
+## What the proof-coverage report says
+
+When this adoption started, fmverify could not report per-method proof coverage. The gate said
+`15 tests passed` and the bridge coverage line said the target declared no annotations. After
+[#29](https://github.com/fzltech/fmverify/pull/41) merged, the same layer can be measured:
+
+```bash
+cd verification
+bash ./verify.sh   # now also writes symbolic-coverage.json
+fmverify audit .. --target-project=CommunityToolkit.HighPerformance \
+  --assembly=src/CommunityToolkit.HighPerformance/bin/Release/net8.0/CommunityToolkit.HighPerformance.dll
+```
+
+The report says:
+
+- **214 public methods** are in the proof surface, and **0** have a public method claim.
+- The four symbolic claims are **proven**, but they sit on internal/private seams
+  (`SliceArithmetic`, `ParallelArithmetic`), so the report lists them under
+  **“Claims outside the public surface”** instead of counting them in the public headline.
+- The largest public gaps are `BitHelper` (18), `Span2D` (15), `Memory2D` (13),
+  `ReadOnlyMemory2D` (13), `ReadOnlySpan2D` (13), `ReadOnlySpanExtensions` (13),
+  `SpanExtensions` (12), `MemoryOwner` (9), `RefEnumerable` (9), and `SpanOwner` (8).
+- Inputs: `symbolic coverage present`; translation manifest and evidence absent.
+
+That is the useful distinction the old gate could not make: the layer has **four proven claims and
+zero public method claims**. The next adoption work is therefore not “write another proof” but
+“pick a public seam”; the report names the largest ones. It also explains why the headline is
+`0/214` rather than `4/214` — the four claims are honest evidence, but they are not claims about the
+public surface.
+
+The command above points `--assembly` at the `net8.0` target because the layer was repaired to
+target `net8.0` (see the framework friction below). The default audit would read the target's first
+TFM, `netstandard2.0`, and then warn that the layer's evidence is stale.
+
+Write the first report as a baseline and compare against it later:
+
+```bash
+fmverify audit .. --target-project=CommunityToolkit.HighPerformance \
+  --assembly=src/CommunityToolkit.HighPerformance/bin/Release/net8.0/CommunityToolkit.HighPerformance.dll \
+  --json > verification/proof-coverage.json
+
+# later
+fmverify audit .. --target-project=CommunityToolkit.HighPerformance \
+  --assembly=src/CommunityToolkit.HighPerformance/bin/Release/net8.0/CommunityToolkit.HighPerformance.dll \
+  --baseline=verification/proof-coverage.json
+```
+
+The first comparison is all zeroes, as it should be. Once a public seam is annotated and claimed,
+the next run shows the proven-method count and the closed gap by type. The baseline is deliberately
+not committed here: it is a report about one run, and the commands above are what reproduce it.
 
 ## Time and friction
 
