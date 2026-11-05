@@ -4,6 +4,10 @@
     <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0</TargetFrameworks>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Fmverify.Annotations" Version="0.3.1" />
+  </ItemGroup>
+
   <PropertyGroup>
     <Title>.NET Community Toolkit - High Performance</Title>
     <Description>

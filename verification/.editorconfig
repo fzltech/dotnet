@@ -1,0 +1,13 @@
+# Scaffold boundary, analyzer-severity half.
+#
+# .editorconfig resolution walks up independently of MSBuild's, and `root = true` is the
+# only thing that stops it. Without this file a parent setting
+# dotnet_diagnostic.<id>.severity = error still escalates diagnostics in generated code —
+# TreatWarningsAsErrors=false does not override an explicit severity.
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+insert_final_newline = true

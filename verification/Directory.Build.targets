@@ -1,0 +1,10 @@
+<Project>
+
+  <!--
+    Scaffold boundary, MSBuild targets half. Intentionally empty: MSBuild resolves
+    Directory.Build.targets independently of Directory.Build.props, so without a file here
+    the target repository's .targets would still apply to generated code — including any
+    target that injects analyzers, rewrites output paths, or fails the build.
+  -->
+
+</Project>

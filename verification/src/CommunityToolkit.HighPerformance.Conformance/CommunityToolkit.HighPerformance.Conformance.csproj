@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    This is the ONLY project in the verification layer that references the target (I-ONE-WAY).
+    The reference points one way: the target must still build with verification/ deleted.
+    Never add a reference back from the target to anything here.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>CommunityToolkit.HighPerformance.Conformance</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CommunityToolkit.HighPerformance.Spec\CommunityToolkit.HighPerformance.Spec.csproj" />
+    <ProjectReference Include="..\..\..\src\CommunityToolkit.HighPerformance\CommunityToolkit.HighPerformance.csproj" />
+  </ItemGroup>
+
+</Project>
