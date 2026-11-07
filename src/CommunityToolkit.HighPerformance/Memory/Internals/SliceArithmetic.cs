@@ -21,8 +21,11 @@ internal static class SliceArithmetic
     /// Computes the pitch of a <paramref name="sliceWidth"/>-wide slice taken from a
     /// <paramref name="width"/>-wide view.
     /// </summary>
-    [Requires("width > 0 && width <= 1024 && pitch >= 0 && pitch <= 1024 && sliceWidth >= 0 && sliceWidth <= width")]
-    [Ensures("result == pitch + (width - sliceWidth) && result >= 0")]
+    [Requires("width > 0 && width <= 1024")]
+    [Requires("pitch >= 0 && pitch <= 1024")]
+    [Requires("sliceWidth >= 0 && sliceWidth <= width")]
+    [Ensures("result == pitch + (width - sliceWidth)")]
+    [Ensures("result >= 0")]
     internal static int GetPitch(int width, int pitch, int sliceWidth)
     {
         return pitch + (width - sliceWidth);
@@ -31,8 +34,10 @@ internal static class SliceArithmetic
     /// <summary>
     /// Adds a column offset to a row offset without overflowing for the proved range.
     /// </summary>
-    [Requires("rowOffset >= 0 && rowOffset <= 1000000 && column >= 0 && column <= 1000000")]
-    [Ensures("result == rowOffset + column && result >= rowOffset")]
+    [Requires("rowOffset >= 0 && rowOffset <= 1000000")]
+    [Requires("column >= 0 && column <= 1000000")]
+    [Ensures("result == rowOffset + column")]
+    [Ensures("result >= rowOffset")]
     internal static int GetColumnOffset(int rowOffset, int column)
     {
         return rowOffset + column;
@@ -42,7 +47,8 @@ internal static class SliceArithmetic
     /// Returns the index of the last element in a zero-based sequence of the given length.
     /// </summary>
     [Requires("length > 0")]
-    [Ensures("result == length - 1 && result >= 0")]
+    [Ensures("result == length - 1")]
+    [Ensures("result >= 0")]
     internal static int GetLastIndex(int length)
     {
         return length - 1;

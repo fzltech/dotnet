@@ -164,22 +164,25 @@ The conformance checker reads a small set of attributes from your code at every 
 cross-checks the hand-written bridge against them. They are optional: an unannotated slice behaves
 exactly as before, and an annotation that is read but not enforced changes nothing.
 
-The attributes are six small types in namespace `Fmverify.Annotations`. There is no published
-package, and the file has to live in a project of your own (the checker reads attributes off your
-assembly), so get it with the tool rather than by hand:
+The attributes are six small types in namespace `Fmverify.Annotations`. The default route is the
+`Fmverify.Annotations` NuGet package, which carries the predicate analyzer. Add it with:
 
 ```bash
-fmverify add-annotations <path> --source   # copies Fmverify.Annotations.cs into the target project
-fmverify add-annotations <path> --source --what-if
+fmverify add-annotations <path> --apply    # writes the PackageReference into the target .csproj
+fmverify add-annotations <path>            # prints the reference and feed instructions
+fmverify add-annotations <path> --apply --what-if
 ```
 
-**Source copy is the supported route today.** The `Fmverify.Annotations` NuGet package is packable
-but not published, so `--package` and `--apply` are deferred; the command's no-flag default still
-suggests the package, so pass `--source` explicitly. The source copy currently requires C# 12 syntax
-and does not include the build-time predicate analyzer; if either blocks you, see `docs/STATUS.md` in
-the fmverify repository rather than editing the copy. The checker itself only
-cares about the attribute names, so the source copy and a future package reference are
-interchangeable at gate time.
+The package is published to GitHub Packages at
+`https://nuget.pkg.github.com/fzltech/index.json`; restore needs that source configured and a token
+with `read:packages`. Central package management is detected: `--apply` refuses with the exact
+`PackageVersion`/`PackageReference` pair to add rather than producing NU1008.
+
+**Source copy is the air-gapped/no-feed fallback.** `--source` writes `Fmverify.Annotations.cs` into
+the target project. It currently requires C# 12 syntax and does not include the build-time predicate
+analyzer; if either blocks you, see `docs/STATUS.md` in the fmverify repository rather than editing
+the copy. The checker itself only cares about the attribute names, so the source copy and the package
+reference are interchangeable at gate time.
 
 **The namespace is the load-bearing part, not where the file came from.** The checker reflects
 your built assembly and matches attributes by full type name, never by assembly identity, so a

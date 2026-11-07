@@ -5,8 +5,9 @@ Community Toolkit, MIT-licensed and maintained by Microsoft / the .NET Foundatio
 **Fork:** [`fzltech/dotnet`](https://github.com/fzltech/dotnet), branch `adoption/properties`.
 **Issue:** [fzltech/fmverify#27](https://github.com/fzltech/fmverify/issues/27).
 **Date:** 2026-11-04; updated 2026-11-05 after
-[fzltech/fmverify#29](https://github.com/fzltech/fmverify/pull/41).
-**fmverify:** `0.1.0`, annotations `2026.09.1`, Z3 `5.3.3`.
+[fzltech/fmverify#29](https://github.com/fzltech/fmverify/pull/41), and 2026-11-07 after the
+adoption-friction fixes.
+**fmverify:** `0.1.0`, annotations `2026.09.2`, Z3 `5.3.3`.
 
 This is the first adoption of fmverify onto a real, external C# library rather than one of its
 own fixtures. The goal was not a big proof; it was to find out what the first hour actually costs,
@@ -34,6 +35,10 @@ from the `Fmverify.Annotations` package reference; this branch does not add a co
 Each is checked by the generated `SymbolicMethodChecks` gate: preconditions are satisfiable,
 32-bit execution agrees with ideal arithmetic, and the postcondition holds for every input in the
 precondition. `verify.sh` is green with all four.
+
+The contracts are written as separate `[Requires]` and `[Ensures]` declarations — the form
+[fzltech/fmverify#36](https://github.com/fzltech/fmverify/issues/36) restored — and the checker
+conjoins them, so the proof is over the same conjunction as before.
 
 ```bash
 cd verification
@@ -240,7 +245,7 @@ The layer writes only under `verification/`. The target changes are confined to 
 seams (`SliceArithmetic.cs`, `ParallelArithmetic.cs`), the two `Slice` call sites, the batch runner,
 and the `OverflowHelper` call site. The annotation allowance arrives as one
 `Fmverify.Annotations` `PackageReference` in `CommunityToolkit.HighPerformance.csproj`; this branch
-does not add a copied annotation file or its `.editorconfig` workaround. The 0.3.1 package is
+does not add a copied annotation file or its `.editorconfig` workaround. The 0.3.3 package is
 vendored under `fmverify-packages/` so the branch restores without feed credentials; an adopter
 uses the GitHub Packages source instead.
 
@@ -259,6 +264,10 @@ uses the GitHub Packages source instead.
   strict target analyzers (`CS1591`, `IDE0073`).
 - [#39](https://github.com/fzltech/fmverify/issues/39) — the bridge coverage line reports “no
   annotations” when the target has annotations but no registered conformance check.
+
+All five landed in fmverify, and this branch was refreshed against them on 2026-11-07: the layer
+is at annotations `2026.09.2` and package `0.3.3`, the contracts are split, and the bridge coverage
+line now says no registered check reported coverage instead of claiming the target declares none.
 
 ## What this does and does not say
 

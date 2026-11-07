@@ -20,8 +20,11 @@ internal static class ParallelArithmetic
     /// Computes the exclusive stop index of a batch without overflowing when the batch's end
     /// reaches <see cref="int.MaxValue"/>.
     /// </summary>
-    [Requires("low >= 0 && low <= end && batchSize > 0")]
-    [Ensures("result <= end && result >= low")]
+    [Requires("low >= 0")]
+    [Requires("low <= end")]
+    [Requires("batchSize > 0")]
+    [Ensures("result <= end")]
+    [Ensures("result >= low")]
     internal static int GetBatchStop(int low, int batchSize, int end)
     {
         return end - low < batchSize ? end : low + batchSize;
