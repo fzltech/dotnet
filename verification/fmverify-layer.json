@@ -6,5 +6,5 @@
   "gateFramework": "xunit",
   "targetProject": "CommunityToolkit.HighPerformance",
   "toolVersion": "0.1.0",
-  "annotationsVersion": "2026.09.1"
+  "annotationsVersion": "2026.09.2"
 }

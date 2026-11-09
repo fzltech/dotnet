@@ -14,7 +14,7 @@
 
 verification:
   stage: test
-  image: mcr.microsoft.com/dotnet/sdk:standard2.0
+  image: mcr.microsoft.com/dotnet/sdk:8.0
   timeout: 30 minutes
   variables:
     DOTNET_CLI_TELEMETRY_OPTOUT: "1"

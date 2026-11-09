@@ -639,15 +639,15 @@ public static class ConformanceChecker
             failures.Add(new ConformanceFailure(
                 FailureKind.AnnotationVersionMismatch, "<declaration>",
                 "the target carries Fmverify.Annotations attributes but declares no Allowance version " +
-                $"marker, so its copy predates the one this layer was generated with (2026.09.1). " +
+                $"marker, so its copy predates the one this layer was generated with (2026.09.2). " +
                 "Refresh it with `fmverify add-annotations <path> --force`."));
         }
-        else if (annotations.AllowanceVersion is { } allowanceVersion && allowanceVersion != "2026.09.1")
+        else if (annotations.AllowanceVersion is { } allowanceVersion && allowanceVersion != "2026.09.2")
         {
             failures.Add(new ConformanceFailure(
                 FailureKind.AnnotationVersionMismatch, "<declaration>",
                 $"the target's annotation allowance is version {allowanceVersion}, but this layer was " +
-                "generated with 2026.09.1. The checker matches attribute types by full " +
+                "generated with 2026.09.2. The checker matches attribute types by full " +
                 "name, so a copy that predates a renamed or reshaped attribute would let it go unread. " +
                 "Refresh it with `fmverify add-annotations <path> --force`."));
         }

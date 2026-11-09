@@ -464,21 +464,30 @@ public static class LayerAnnotationCoverage
     public static string Describe(IEnumerable<ConformanceReport> reports)
     {
         var all = reports.ToList();
-        var found = all.Select(r => r.Coverage).OfType<AnnotationCoverage>()
-            .Select(c => c.Found).DefaultIfEmpty(0).Max();
+        var coverage = all.Select(r => r.Coverage).OfType<AnnotationCoverage>().ToList();
+        var found = coverage.Select(c => c.Found).DefaultIfEmpty(0).Max();
         var noCheck = ReachedByNoCheck(all);
 
-        // "0 of 0" was the whole defect this block was rewritten for, and leaving the ratio in place
-        // for the zero case would have left the misreading intact: a target annotated only with
-        // [Deterministic] read its own report as having found nothing. Where there is nothing to
-        // count, the line says which kinds are counted instead of counting them.
-        var lines = new List<string>
+        // "0 of 0" was the whole defect this block was rewritten for, and the zero case kept a
+        // second one: with no report to count, the old sentence claimed the target declared no
+        // annotations at all. That is not something this report knows -- a layer can carry four
+        // source-level contracts the symbolic gate proved and still have no registered conformance
+        // check. Say what was measured, then point at the section that measures the rest. Name the
+        // counted kinds: [Deterministic] is reported separately as a seam, and a bare "no
+        // annotation" would contradict the seam block that follows for a target carrying only that.
+        var lines = new List<string>();
+        if (found > 0)
         {
-            found > 0
-                ? $"Annotation coverage: {found - noCheck.Count} of {found} reached by a registered check."
-                : "Annotation coverage: the target declares no [Requires], [Ensures], [Invariant], "
-                  + "[Measure] or [Step] annotation, so there is nothing here to count.",
-        };
+            lines.Add($"Annotation coverage: {found - noCheck.Count} of {found} reached by a registered check.");
+        }
+        else
+        {
+            lines.Add(coverage.Count > 0
+                ? "Annotation coverage: no [Requires], [Ensures], [Invariant], [Measure] or [Step] "
+                  + "annotation was reached by a registered check."
+                : "Annotation coverage: no registered check reported annotation coverage.");
+            lines.Add("Source-level [Requires]/[Ensures] contracts are reported under Symbolic coverage.");
+        }
 
         if (noCheck.Count > 0)
         {

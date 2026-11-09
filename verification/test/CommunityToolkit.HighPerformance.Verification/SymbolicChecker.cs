@@ -451,7 +451,26 @@ public static class SymbolicChecker
 {
     private static readonly ConcurrentBag<Context> RetainedContexts = new();
 
-    public static SymbolicCheckResult CheckContracts(string source, string methodName)
+    /// <summary>
+    /// Wall-clock cap on one Z3 query. A product of two symbolic operands is a decidable QF_BV
+    /// query, but its bit-blasted form can run for hours; without a bound this gate hangs CI
+    /// instead of reporting the limit. A query that exhausts this budget returns
+    /// <see cref="Status.UNKNOWN"/>, which is reported as Unsupported and never as Verified.
+    /// </summary>
+    public const uint SolverTimeoutMilliseconds = 5_000;
+
+    private static Solver NewSolver(Context context, uint solverTimeoutMilliseconds)
+    {
+        var solver = context.MkSolver();
+        solver.Set("timeout", solverTimeoutMilliseconds);
+        return solver;
+    }
+
+    public static SymbolicCheckResult CheckContracts(string source, string methodName) =>
+        CheckContracts(source, methodName, SolverTimeoutMilliseconds);
+
+    public static SymbolicCheckResult CheckContracts(
+        string source, string methodName, uint solverTimeoutMilliseconds)
     {
         MethodDeclarationSyntax method;
         try
@@ -463,10 +482,14 @@ public static class SymbolicChecker
             return new SymbolicCheckResult.Unsupported(methodName, ex.Message);
         }
 
-        return CheckContracts(method);
+        return CheckContracts(method, solverTimeoutMilliseconds);
     }
 
-    public static SymbolicCheckResult CheckContracts(MethodDeclarationSyntax method)
+    public static SymbolicCheckResult CheckContracts(MethodDeclarationSyntax method) =>
+        CheckContracts(method, SolverTimeoutMilliseconds);
+
+    public static SymbolicCheckResult CheckContracts(
+        MethodDeclarationSyntax method, uint solverTimeoutMilliseconds)
     {
         var methodName = method.Identifier.Text;
         if (SubsetValidator.Validate(method) is { } reason)
@@ -501,12 +524,12 @@ public static class SymbolicChecker
                 return new SymbolicCheckResult.Unsupported(methodName, ex.Message);
             }
 
-            var preSolver = ctx.MkSolver();
+            var preSolver = NewSolver(ctx, solverTimeoutMilliseconds);
             preSolver.Assert(pre.Bv);
             var preStatus = preSolver.Check();
             if (preStatus == Status.UNKNOWN)
             {
-                return new SymbolicCheckResult.Unsupported(methodName, $"solver returned unknown on precondition: {preSolver.ReasonUnknown}");
+                return new SymbolicCheckResult.Unsupported(methodName, $"solver returned unknown on precondition: {preSolver.ReasonUnknown} (query budget {solverTimeoutMilliseconds} ms)");
             }
             if (preStatus == Status.UNSATISFIABLE)
             {
@@ -540,7 +563,7 @@ public static class SymbolicChecker
             return new SymbolicCheckResult.Unsupported(methodName, "unsupported return type");
         }
 
-        var overflowSolver = ctx.MkSolver();
+        var overflowSolver = NewSolver(ctx, solverTimeoutMilliseconds);
         if (pre != null)
         {
             overflowSolver.Assert(pre.Bv);
@@ -549,7 +572,7 @@ public static class SymbolicChecker
         var overflowStatus = overflowSolver.Check();
         if (overflowStatus == Status.UNKNOWN)
         {
-            return new SymbolicCheckResult.Unsupported(methodName, $"solver returned unknown on overflow check: {overflowSolver.ReasonUnknown}");
+            return new SymbolicCheckResult.Unsupported(methodName, $"solver returned unknown on overflow check: {overflowSolver.ReasonUnknown} (query budget {solverTimeoutMilliseconds} ms)");
         }
         if (overflowStatus == Status.SATISFIABLE)
         {
@@ -600,7 +623,7 @@ public static class SymbolicChecker
                     return new SymbolicCheckResult.Unsupported(methodName, ex.Message);
                 }
 
-                var postSolver = ctx.MkSolver();
+                var postSolver = NewSolver(ctx, solverTimeoutMilliseconds);
                 if (pre != null)
                 {
                     postSolver.Assert(pre.Bv);
@@ -609,7 +632,7 @@ public static class SymbolicChecker
                 var postStatus = postSolver.Check();
                 if (postStatus == Status.UNKNOWN)
                 {
-                    return new SymbolicCheckResult.Unsupported(methodName, $"solver returned unknown on postcondition check: {postSolver.ReasonUnknown}");
+                    return new SymbolicCheckResult.Unsupported(methodName, $"solver returned unknown on postcondition check: {postSolver.ReasonUnknown} (query budget {solverTimeoutMilliseconds} ms)");
                 }
                 if (postStatus == Status.SATISFIABLE)
                 {

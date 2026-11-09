@@ -49,7 +49,7 @@ internal static class OverflowHelper
         // Additionally, we're also ensuring that the stride is never greater than int.MaxValue, for
         // consistency with how ND arrays work (int.MaxValue as upper bound for each axis), and to
         // allow for faster iteration in the RefEnumerable<T> type, when traversing columns.
-        _ = checked(((nint)(width + pitch) * Max(unchecked(height - 1), 0)) + Max(unchecked(width - 1), 0));
+        _ = checked(((nint)(width + pitch) * Max(SliceArithmetic.GetLastIndex(height), 0)) + Max(SliceArithmetic.GetLastIndex(width), 0));
     }
 
     /// <summary>
